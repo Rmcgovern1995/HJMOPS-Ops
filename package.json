@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "echo \"Development server not configured; open index.html in your browser.\"",
-    "build": "node build.js && cd dist && zip -r ../hjmops_v4.1.0.zip .",
+    "csv2json": "node scripts/csv2json.js",
+    "build": "npm run csv2json && node build.js && cd dist && zip -r ../hjmops_v4.1.1.zip .",
     "lint": "eslint . --ext .js",
     "format": "prettier --write .",
     "test": "jest"
