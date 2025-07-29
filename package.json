@@ -1,0 +1,22 @@
+{
+  "name": "hjmops-ops",
+  "version": "0.0.0",
+  "description": "Standalone offline PWA for H&J Medical Supplies operations",
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"Development server not configured; open index.html in your browser.\"",
+    "build": "node build.js && cd dist && zip -r ../hjmops_v4.1.0.zip .",
+    "lint": "eslint . --ext .js",
+    "format": "prettier --write .",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^2.8.8",
+    "jest": "^29.5.0",
+    "@jest/globals": "^29.5.0",
+    "lighthouse": "^10.4.0",
+    "@lhci/cli": "^0.13.0"
+  }
+}
