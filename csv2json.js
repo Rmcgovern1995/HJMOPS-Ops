@@ -23,22 +23,39 @@ files.forEach((file) => {
     columns: true,
     skip_empty_lines: true,
   });
-  // Derive payer name from filename
+  // Determine output based on file name. If this is an Inventory CSV, write to
+  // inventory.json. Otherwise derive the payer name and prefix with allowables_.
   const lower = file.toLowerCase();
-  let payer;
-  if (lower.includes('medicaid')) {
-    payer = 'medicaid';
-  } else if (lower.includes('medicare')) {
-    payer = 'medicare';
-  } else if (lower.includes('commercial')) {
-    payer = 'commercial';
+  if (lower.includes('inventory')) {
+    // Normalize inventory record fields. Coerce numeric fields.
+    const invRecords = records.map((r) => ({
+      sku: r.sku || r.SKU || r.Sku,
+      name: r.name || r.Name || r.description || r.Description || '',
+      hcpcs: r.hcpcs || r.HCPCS || r.procCode || r.ProcCode || '',
+      onHand: r.onHand !== undefined ? Number(r.onHand) : Number(r.onhand || r.OnHand || r.quantity || 0),
+      reorderPoint: r.reorderPoint !== undefined ? Number(r.reorderPoint) : Number(r.reorderpoint || r.ReorderPoint || r.reorder_pt || 0),
+      avgCost: r.avgCost !== undefined ? Number(r.avgCost) : Number(r.avgcost || r.unitCost || r.UnitCost || 0),
+      rentalRate: r.rentalRate !== undefined ? Number(r.rentalRate) : Number(r.rentalrate || r.RentalRate || 0),
+    }));
+    const outPath = new URL('inventory.json', DATA_DIR);
+    fs.writeFileSync(outPath, JSON.stringify(invRecords));
+    console.log(`Converted ${file} -> inventory.json`);
   } else {
-    // Default: use filename without extension, remove spaces
-    payer = path.basename(file, '.csv').replace(/\s+/g, '').toLowerCase();
+    // Derive payer name from filename
+    let payer;
+    if (lower.includes('medicaid')) {
+      payer = 'medicaid';
+    } else if (lower.includes('medicare')) {
+      payer = 'medicare';
+    } else if (lower.includes('commercial')) {
+      payer = 'commercial';
+    } else {
+      // Default: use filename without extension, remove spaces
+      payer = path.basename(file, '.csv').replace(/\s+/g, '').toLowerCase();
+    }
+    const outName = `allowables_${payer}.json`;
+    const outPath = new URL(outName, DATA_DIR);
+    fs.writeFileSync(outPath, JSON.stringify(records));
+    console.log(`Converted ${file} -> ${outName}`);
   }
-  const outName = `allowables_${payer}.json`;
-  const outPath = new URL(outName, DATA_DIR);
-  // Write minified JSON
-  fs.writeFileSync(outPath, JSON.stringify(records));
-  console.log(`Converted ${file} -> ${outName}`);
 });

@@ -417,8 +417,205 @@ async function refreshRoutes(){
     });
   });
 }
-function buildInventory(){const sec=document.getElementById('inventory');sec.innerHTML=`<h2>Inventory</h2><form id="inventory-form"><label>SKU:<input name="sku" required /></label><br/><label>Description:<input name="description" /></label><br/><label>HCPCS Code:<input name="procCode" /></label><br/><label>Unit Cost:<input name="unitCost" type="number" min="0" step="0.01" required /></label><br/><label>Quantity:<input name="quantity" type="number" min="0" step="1" required /></label><br/><button type="submit">Add / Update Item</button></form><div id="inventory-list"></div>`;const form=sec.querySelector('#inventory-form');form.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(form);const sku=fd.get('sku').trim();const desc=fd.get('description').trim();const code=fd.get('procCode')?fd.get('procCode').trim():'';const unitCost=parseFloat(fd.get('unitCost'))||0;const qty=parseInt(fd.get('quantity'),10)||0;const rec={sku:sku,description:desc,procCode:code,unitCost:unitCost,quantity:qty};await dbPut('inventory',rec);form.reset();refreshInventory();updateDashboard();});refreshInventory();}
-async function refreshInventory(){const items=await dbGetAll('inventory');const cont=document.getElementById('inventory-list');if(!items.length){cont.innerHTML='<p>No inventory items.</p>';return;}let html='<table><thead><tr><th>SKU</th><th>Description</th><th>HCPCS</th><th>Unit Cost</th><th>Qty</th><th>Total Value</th><th>Medicaid</th><th>Medicare</th><th>Commercial</th><th></th></tr></thead><tbody>';items.forEach(it=>{const total=it.unitCost*it.quantity;html+=`<tr><td>${it.sku}</td><td>${it.description||''}</td><td>${it.procCode||''}</td><td>$${it.unitCost.toFixed(2)}</td><td>${it.quantity}</td><td>$${total.toFixed(2)}</td><td>$${(function(){try{const t=calcOrderLocal('Medicaid',it.procCode||'',1,0);return t&&t.revenue?t.revenue:0;}catch(e){return 0;}})().toFixed(2)}</td><td>$${(function(){try{const t2=calcOrderLocal('Medicare',it.procCode||'',1,0);return t2&&t2.revenue?t2.revenue:0;}catch(e){return 0;}})().toFixed(2)}</td><td>$${(function(){try{const t3=calcOrderLocal('Commercial',it.procCode||'',1,0);return t3&&t3.revenue?t3.revenue:0;}catch(e){return 0;}})().toFixed(2)}</td><td><button data-sku="${it.sku}" class="delete-item">Delete</button></td></tr>`;});html+='</tbody></table>';cont.innerHTML=html;cont.querySelectorAll('.delete-item').forEach(btn=>{btn.addEventListener('click',async()=>{const sku=btn.getAttribute('data-sku');await dbDelete('inventory',sku);refreshInventory();updateDashboard();});});}
+// Inventory management with CRUD, low‑stock highlighting and CSV export
+function buildInventory(){
+  const sec=document.getElementById('inventory');
+  sec.innerHTML=`<h2 class="text-xl font-semibold mb-2">Inventory</h2>
+    <div class="flex flex-wrap justify-between items-center mb-4">
+      <button id="inv-add-btn" class="bg-red-700 text-white px-3 py-1 rounded mb-2">Add Item</button>
+      <div class="space-x-2">
+        <button id="inv-scan-btn" class="bg-gray-200 px-3 py-1 rounded mb-2">Scan Barcode</button>
+        <button id="inv-export-btn" class="bg-gray-200 px-3 py-1 rounded mb-2">Export CSV</button>
+      </div>
+    </div>
+    <div id="inventory-table"></div>
+    <!-- Item Modal -->
+    <div id="inv-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+      <div class="bg-white p-4 rounded shadow-md w-96">
+        <h3 id="inv-modal-title" class="text-lg font-bold mb-2">Add Item</h3>
+        <form id="inv-form" class="space-y-2">
+          <div>
+            <label class="block text-sm font-medium">SKU</label>
+            <input type="text" name="sku" id="inv-sku" class="w-full border p-1" required />
+          </div>
+          <div>
+            <label class="block text-sm font-medium">Name</label>
+            <input type="text" name="name" id="inv-name" class="w-full border p-1" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium">HCPCS</label>
+            <input type="text" name="hcpcs" id="inv-hcpcs" class="w-full border p-1" />
+          </div>
+          <div class="flex space-x-2">
+            <div class="flex-1">
+              <label class="block text-sm font-medium">On-Hand</label>
+              <input type="number" min="0" step="1" name="onHand" id="inv-onHand" class="w-full border p-1" required />
+            </div>
+            <div class="flex-1">
+              <label class="block text-sm font-medium">Reorder Pt</label>
+              <input type="number" min="0" step="1" name="reorderPoint" id="inv-reorder" class="w-full border p-1" required />
+            </div>
+          </div>
+          <div class="flex space-x-2">
+            <div class="flex-1">
+              <label class="block text-sm font-medium">Avg Cost</label>
+              <input type="number" min="0" step="0.01" name="avgCost" id="inv-avgCost" class="w-full border p-1" required />
+            </div>
+            <div class="flex-1">
+              <label class="block text-sm font-medium">Rental Rate</label>
+              <input type="number" min="0" step="0.01" name="rentalRate" id="inv-rentalRate" class="w-full border p-1" />
+            </div>
+          </div>
+          <div class="text-right space-x-2 mt-2">
+            <button type="button" id="inv-cancel" class="bg-gray-300 px-3 py-1 rounded">Cancel</button>
+            <button type="submit" class="bg-red-700 text-white px-3 py-1 rounded">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Scan Modal -->
+    <div id="scan-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+      <div class="bg-white p-4 rounded shadow-md w-80">
+        <h3 class="text-lg font-bold mb-2">Scan Barcode</h3>
+        <p class="mb-4">Barcode scanning functionality will be implemented in Sprint 6.</p>
+        <button id="scan-close" class="bg-red-700 text-white px-3 py-1 rounded">Close</button>
+      </div>
+    </div>`;
+  // Attach event handlers
+  document.getElementById('inv-add-btn').addEventListener('click',()=>openItemModal());
+  document.getElementById('inv-export-btn').addEventListener('click',exportInventory);
+  document.getElementById('inv-scan-btn').addEventListener('click',openScanModal);
+  document.getElementById('scan-close').addEventListener('click',closeScanModal);
+  document.getElementById('inv-form').addEventListener('submit',saveItem);
+  document.getElementById('inv-cancel').addEventListener('click',closeItemModal);
+  refreshInventory();
+}
+
+// Open modal for new or existing item
+function openItemModal(item){
+  const modal=document.getElementById('inv-modal');
+  modal.classList.remove('hidden');
+  const title=document.getElementById('inv-modal-title');
+  const skuInput=document.getElementById('inv-sku');
+  const nameInput=document.getElementById('inv-name');
+  const hcpcsInput=document.getElementById('inv-hcpcs');
+  const onHandInput=document.getElementById('inv-onHand');
+  const reorderInput=document.getElementById('inv-reorder');
+  const avgCostInput=document.getElementById('inv-avgCost');
+  const rentalInput=document.getElementById('inv-rentalRate');
+  if(item){
+    title.textContent='Edit Item';
+    skuInput.value=item.sku;
+    skuInput.disabled=true;
+    nameInput.value=item.name||'';
+    hcpcsInput.value=item.hcpcs||'';
+    onHandInput.value=item.onHand||item.quantity||0;
+    reorderInput.value=item.reorderPoint||0;
+    avgCostInput.value=item.avgCost||item.unitCost||0;
+    rentalInput.value=item.rentalRate||0;
+  }else{
+    title.textContent='Add Item';
+    skuInput.value='';
+    skuInput.disabled=false;
+    nameInput.value='';
+    hcpcsInput.value='';
+    onHandInput.value='';
+    reorderInput.value='';
+    avgCostInput.value='';
+    rentalInput.value='';
+  }
+}
+
+function closeItemModal(){
+  document.getElementById('inv-modal').classList.add('hidden');
+}
+
+function openScanModal(){
+  document.getElementById('scan-modal').classList.remove('hidden');
+}
+function closeScanModal(){
+  document.getElementById('scan-modal').classList.add('hidden');
+}
+
+async function saveItem(e){
+  e.preventDefault();
+  const sku=document.getElementById('inv-sku').value.trim();
+  const name=document.getElementById('inv-name').value.trim();
+  const hcpcs=document.getElementById('inv-hcpcs').value.trim();
+  const onHand=parseInt(document.getElementById('inv-onHand').value,10)||0;
+  const reorder=parseInt(document.getElementById('inv-reorder').value,10)||0;
+  const avgCost=parseFloat(document.getElementById('inv-avgCost').value)||0;
+  const rentalRate=parseFloat(document.getElementById('inv-rentalRate').value)||0;
+  const record={sku,name,hcpcs,onHand,reorderPoint:reorder,avgCost,rentalRate};
+  await dbPut('inventory',record);
+  closeItemModal();
+  refreshInventory();
+  updateDashboard&&updateDashboard();
+}
+
+async function refreshInventory(){
+  const items=await dbGetAll('inventory');
+  const cont=document.getElementById('inventory-table');
+  if(!items.length){
+    cont.innerHTML='<p>No inventory items.</p>';
+    return;
+  }
+  let html='<table class="min-w-full border"><thead><tr class="bg-gray-100"><th class="px-2 py-1 border">SKU</th><th class="px-2 py-1 border">Name</th><th class="px-2 py-1 border">HCPCS</th><th class="px-2 py-1 border">On-Hand</th><th class="px-2 py-1 border">Reorder Pt</th><th class="px-2 py-1 border">Avg Cost</th><th class="px-2 py-1 border">Rental Rate</th><th class="px-2 py-1 border">Actions</th></tr></thead><tbody>';
+  items.forEach(it=>{
+    const onHand=it.onHand!==undefined?it.onHand:it.quantity||0;
+    const reorder=it.reorderPoint!==undefined?it.reorderPoint:0;
+    const rowClass=onHand<=reorder?'bg-red-100':'';
+    html+=`<tr class="${rowClass}"><td class="border px-2 py-1">${it.sku}</td><td class="border px-2 py-1">${it.name||it.description||''}</td><td class="border px-2 py-1">${it.hcpcs||it.procCode||''}</td><td class="border px-2 py-1 text-right">${onHand}</td><td class="border px-2 py-1 text-right">${reorder}</td><td class="border px-2 py-1 text-right">$${(it.avgCost!==undefined?it.avgCost:it.unitCost||0).toFixed(2)}</td><td class="border px-2 py-1 text-right">$${(it.rentalRate||0).toFixed(2)}</td><td class="border px-2 py-1 text-center"><button class="text-blue-600 underline mr-2" data-edit="${it.sku}">Edit</button><button class="text-red-600 underline" data-del="${it.sku}">Delete</button></td></tr>`;
+  });
+  html+='</tbody></table>';
+  cont.innerHTML=html;
+  // Attach edit/delete handlers
+  cont.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const sku=btn.getAttribute('data-edit');
+      const rec=(await dbGetAll('inventory')).find(r=>String(r.sku)===String(sku));
+      openItemModal(rec);
+    });
+  });
+  cont.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const sku=btn.getAttribute('data-del');
+      if(confirm('Delete item '+sku+'?')){
+        await dbDelete('inventory',sku);
+        refreshInventory();
+        updateDashboard&&updateDashboard();
+      }
+    });
+  });
+}
+
+async function exportInventory(){
+  const items=await dbGetAll('inventory');
+  if(!items.length){alert('No inventory to export.');return;}
+  const header=['sku','name','hcpcs','onHand','reorderPoint','avgCost','rentalRate'];
+  const rows=items.map(it=>{
+    return [
+      it.sku,
+      it.name||it.description||'',
+      it.hcpcs||it.procCode||'',
+      it.onHand!==undefined?it.onHand:it.quantity||0,
+      it.reorderPoint!==undefined?it.reorderPoint:0,
+      it.avgCost!==undefined?it.avgCost:it.unitCost||0,
+      it.rentalRate||0
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const csv=[header.join(','),...rows].join('\n');
+  const date=new Date().toISOString().slice(0,10);
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`inventory_export_${date}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function buildLookup(){const sec=document.getElementById('lookup');sec.innerHTML='<h2>Lookup</h2><input id="lookup-search" placeholder="Search by code or item name" style="width:100%;padding:5px;margin-bottom:10px;"/><div id="lookup-list"></div>';const inp=sec.querySelector('#lookup-search');inp.addEventListener('input',()=>{refreshLookup(inp.value.trim());});refreshLookup('');}
 function refreshLookup(q){const cont=document.getElementById('lookup-list');const query=(q||'').toLowerCase();if(!window.lookupCache){const map=new Map();const add=(arr,plan)=>{arr.forEach(rec=>{const key=rec.procCode+'|'+rec.itemName;let obj=map.get(key);if(!obj){obj={code:rec.procCode,itemName:rec.itemName,medicaid:0,medicare:0,commercial:0};map.set(key,obj);}if(plan==='medicaid')obj.medicaid=rec.allowAmt;if(plan==='medicare')obj.medicare=rec.allowAmt;if(plan==='commercial')obj.commercial=rec.allowAmt;});};add(medicaidAllowables,'medicaid');add(medicareAllowables,'medicare');add(commercialAllowables,'commercial');window.lookupCache=Array.from(map.values());}const results=window.lookupCache.filter(item=>{return !query||item.code.toLowerCase().includes(query)||item.itemName.toLowerCase().includes(query);});if(!results.length){cont.innerHTML='<p>No matches.</p>';return;}let html='<table><thead><tr><th>Code</th><th>Item</th><th>Medicaid Purchase</th><th>Medicaid Rental</th><th>Medicare Purchase</th><th>Medicare Rental</th><th>Commercial Purchase</th><th>Commercial Rental</th></tr></thead><tbody>';results.forEach(item=>{const m=item.medicaid||0;const md=item.medicare||0;const c=item.commercial||0;const mRent=m*1;const mdRent=md*11;const cRent=c*11;html+=`<tr><td>${item.code}</td><td>${item.itemName}</td><td>$${m.toFixed(2)}</td><td>$${mRent.toFixed(2)}</td><td>$${md.toFixed(2)}</td><td>$${mdRent.toFixed(2)}</td><td>$${c.toFixed(2)}</td><td>$${cRent.toFixed(2)}</td></tr>`;});html+='</tbody></table>';cont.innerHTML=html;}
