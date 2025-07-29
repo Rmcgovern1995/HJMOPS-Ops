@@ -13,7 +13,8 @@ jobs:
       - name: Install tooling
         run: |
           npm init -y
-          npm install eslint @lhci/cli -D
+          npm install eslint @lhci/cli csv-parse -D
+          node csv2json.js
           npx eslint **/*.js
 
       - name: Lighthouse CI
