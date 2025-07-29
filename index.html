@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>H&J DME Ops</title>
+  <!-- Import compiled stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Tailwind CDN for quick utility classes while keeping red–white theme -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!--
+    Structured layout with header, nav and main.
+    The nav includes a hamburger button for small screens, a theme toggle and
+    all primary navigation links.  Content renders into <main id="app"></main>
+    from app.js.
+  -->
+  <header class="bg-red-700 text-white">
+    <nav class="flex items-center justify-between px-4 py-2">
+      <button id="nav-toggle" aria-label="Toggle navigation" class="md:hidden p-2 focus:outline-none">
+        &#9776;
+      </button>
+      <div class="nav-links flex space-x-4 md:space-x-6">
+        <a href="#dashboard" id="nav-dashboard" class="block py-1 px-2 hover:underline">Dashboard</a>
+        <a href="#orders" id="nav-orders" class="block py-1 px-2 hover:underline">Orders</a>
+        <a href="#routes" id="nav-routes" class="block py-1 px-2 hover:underline">Routes</a>
+        <a href="#inventory" id="nav-inventory" class="block py-1 px-2 hover:underline">Inventory</a>
+        <a href="#lookup" id="nav-lookup" class="block py-1 px-2 hover:underline">Lookup</a>
+        <a href="#reports" id="nav-reports" class="block py-1 px-2 hover:underline">Reports</a>
+        <a href="#settings" id="nav-settings" class="block py-1 px-2 hover:underline">Settings</a>
+      </div>
+      <button id="themeToggle" aria-label="Toggle dark mode" class="p-2">
+        🌓
+      </button>
+    </nav>
+  </header>
+  <main id="app" class="flex-1 overflow-y-auto p-4"></main>
+  <!-- Progressive Web App manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <!-- Application JavaScript -->
+  <script defer src="app.js"></script>
+</body>
+</html>

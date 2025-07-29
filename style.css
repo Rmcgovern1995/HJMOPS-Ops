@@ -1,0 +1,135 @@
+/*
+ * Base styles for H&J DME Ops
+ * Extracted from the original monolithic file and expanded for readability.
+ */
+
+:root {
+  --hj-red: #C40E0E;
+  --hj-white: #FFFFFF;
+  --background-color: #F9F9F9;
+  --text-color: #333333;
+  --border-radius: 4px;
+  --nav-height: 50px;
+  font-family: sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+nav {
+  height: var(--nav-height);
+  background-color: var(--hj-red);
+  color: var(--hj-white);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+nav a {
+  color: var(--hj-white);
+  text-decoration: none;
+  padding: 10px 15px;
+}
+
+nav a.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+main {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+section {
+  display: none;
+}
+
+section.active {
+  display: block;
+}
+
+button {
+  background-color: var(--hj-red);
+  color: var(--hj-white);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+input,
+select {
+  padding: 5px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: left;
+}
+
+/* Responsive navigation styles */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--nav-height);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    background-color: var(--hj-red);
+    width: 100%;
+    position: absolute;
+    top: var(--nav-height);
+    left: 0;
+    z-index: 10;
+  }
+  .nav-links.active {
+    display: flex;
+  }
+  .nav-links a {
+    padding: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+  }
+}
+
+#nav-toggle {
+  font-size: 1.5rem;
+  background: none;
+  color: var(--hj-white);
+  border: none;
+  cursor: pointer;
+}
+
+#themeToggle {
+  background: none;
+  border: none;
+  color: var(--hj-white);
+  cursor: pointer;
+}
